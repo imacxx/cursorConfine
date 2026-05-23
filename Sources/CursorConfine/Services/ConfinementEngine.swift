@@ -43,12 +43,6 @@ final class ConfinementEngine {
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    /// Position of the most recent warp. When the user pushes against an
-    /// edge a gaming mouse can deliver 1000 mouseMoved events / second, all
-    /// clamping to the same point. Skipping the WindowServer round-trip
-    /// when the target hasn't changed cuts warp traffic by ~99% during
-    /// edge slides.
-    private var lastWarpPos: CGPoint?
 
     // The mouse event types we observe. Keys/buttons are never trapped.
     private static let eventsOfInterest: CGEventMask =
@@ -140,7 +134,6 @@ final class ConfinementEngine {
     func disengage() {
         self.activeRect = nil
         self.isConfining = false
-        self.lastWarpPos = nil   // next engage starts fresh
     }
 
     // MARK: - Event tap callback
@@ -175,13 +168,15 @@ final class ConfinementEngine {
         let clamped = Geometry.clamp(point: loc, to: rect)
         if clamped != loc {
             event.location = clamped
-            // Only warp the sprite if the clamped target actually moved.
-            // Without this we'd hammer WindowServer with a warp per HID
-            // poll (~1000/s on gaming mice) while sliding along an edge.
-            if clamped != lastWarpPos {
-                CGWarpMouseCursorPosition(clamped)
-                lastWarpPos = clamped
-            }
+            // Always warp on out-of-bounds. CGWarpMouseCursorPosition also
+            // updates the system's internal HID position — without it, the
+            // OS keeps accumulating mouse delta past the boundary while
+            // the user pushes against it, so they later have to "drag the
+            // cursor back" through that accumulated overshoot before it
+            // moves at all. That presents as "the cursor is stuck to the
+            // side." Dedup'ing warps avoids the WindowServer round-trip
+            // but reintroduces the accumulation bug.
+            CGWarpMouseCursorPosition(clamped)
         }
         return Unmanaged.passUnretained(event)
     }
