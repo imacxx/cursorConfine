@@ -110,21 +110,52 @@ final class WindowService {
         return scored.first?.w
     }
 
-    /// The frontmost real window owned by the frontmost app, if any.
+    /// The window the user is currently looking at — the *visually* topmost
+    /// on-screen window. We deliberately don't match by `NSWorkspace
+    /// .frontmostApplication.pid` because multi-process apps (League of
+    /// Legends ships separate `GameClient` and `LeagueClient` processes,
+    /// Chromium-based apps split tabs across helpers, etc.) often disagree
+    /// with macOS about which pid "owns" the visible window. CGWindowList's
+    /// natural ordering is front-to-back z-order — index 0 is by definition
+    /// what the user is interacting with.
     func frontmostWindow() -> WindowInfo? {
-        let windows = enumerate()
-        guard let frontApp = NSWorkspace.shared.frontmostApplication else {
-            return windows.first
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let infoList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+            return nil
         }
-        let pid = frontApp.processIdentifier
-        // CGWindowList returns front-to-back order; pick the first that belongs
-        // to the frontmost app.
-        return windows.first(where: { $0.pid == pid }) ?? windows.first
+        let myPID = ProcessInfo.processInfo.processIdentifier
+
+        for info in infoList {
+            guard let layer = info[kCGWindowLayer as String] as? Int, layer >= 0 else { continue }
+            guard let pid = info[kCGWindowOwnerPID as String] as? Int32, pid != myPID else { continue }
+            guard let boundsDict = info[kCGWindowBounds as String] as? [String: Any],
+                  let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary),
+                  bounds.width >= 200, bounds.height >= 150 else { continue }
+
+            let running = NSRunningApplication(processIdentifier: pid_t(pid))
+            if let bid = running?.bundleIdentifier,
+               Self.systemUIPrefixes.contains(where: { bid.hasPrefix($0) }) { continue }
+
+            guard let windowID = info[kCGWindowNumber as String] as? CGWindowID else { continue }
+            let appName = (info[kCGWindowOwnerName as String] as? String) ?? ""
+            let title   = (info[kCGWindowName as String] as? String) ?? ""
+            let isOnScreen = (info[kCGWindowIsOnscreen as String] as? Bool) ?? true
+
+            return WindowInfo(
+                id: windowID, appName: appName, title: title, bounds: bounds,
+                pid: pid_t(pid), bundleIdentifier: running?.bundleIdentifier,
+                layer: layer, isOnScreen: isOnScreen
+            )
+        }
+        return nil
     }
 
     /// Returns the current bounds for a specific window ID, or nil if it's gone.
     func currentBounds(forWindowID id: CGWindowID) -> CGRect? {
-        let options: CGWindowListOption = [.optionIncludingWindow]
+        // `.optionIncludingWindow` only adds the named window IF a co-option
+        // makes it eligible. Combine with `.optionAll` so we still find the
+        // bounds when the window is on a different Space / minimized.
+        let options: CGWindowListOption = [.optionAll, .optionIncludingWindow]
         guard let info = CGWindowListCopyWindowInfo(options, id) as? [[String: Any]] else { return nil }
         guard let first = info.first else { return nil }
         guard let boundsDict = first[kCGWindowBounds as String] as? [String: Any],

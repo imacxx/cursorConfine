@@ -40,8 +40,19 @@ cp art/icon-dark.png  "$APP_BUNDLE/Contents/Resources/icon-dark.png"
 # Strip any quarantine/extended attributes that would interfere with running
 xattr -cr "$APP_BUNDLE" 2>/dev/null || true
 
-echo "==> Ad-hoc signing"
-codesign --force --deep --sign - "$APP_BUNDLE"
+echo "==> Signing"
+# Prefer the stable "CursorConfine Dev" identity if the user has run
+# setup_signing_cert.sh. Falls back to ad-hoc (`-`), which works but
+# breaks TCC trust on every rebuild because the cdhash changes.
+STABLE_IDENTITY="CursorConfine Dev"
+if security find-identity -v -p codesigning 2>/dev/null | grep -q "\"$STABLE_IDENTITY\""; then
+    SIGN_ARGS="--sign \"$STABLE_IDENTITY\""
+    echo "  using stable identity: $STABLE_IDENTITY"
+    codesign --force --deep --sign "$STABLE_IDENTITY" "$APP_BUNDLE"
+else
+    echo "  using ad-hoc signing (run setup_signing_cert.sh to get stable TCC trust)"
+    codesign --force --deep --sign - "$APP_BUNDLE"
+fi
 
 echo "==> Verifying signature"
 codesign --verify --verbose=2 "$APP_BUNDLE"

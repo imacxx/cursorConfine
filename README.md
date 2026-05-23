@@ -88,11 +88,28 @@ Onboarding flow and the **Permissions** tab in the main window.
 
 If you reject the prompt, open **System Settings → Privacy & Security →
 Accessibility / Screen Recording** and add `CursorConfine.app` manually.
-After granting Accessibility, relaunch the app.
+No quit-and-relaunch needed — `PermissionsService` polls every 1.5 s and
+auto-installs the event tap the moment Accessibility flips on.
 
-> macOS treats ad-hoc-signed apps as "new identities," so each rebuild may
-> appear as a new entry in System Settings. Toggle it off and on, or remove
-> the old entry, after rebuilds.
+### Stable signing for development (recommended)
+
+Without it, every `./build.sh` produces a new ad-hoc cdhash and macOS TCC
+forgets your Accessibility / Screen Recording grants — you'd have to toggle
+the entry in System Settings off-and-on after every rebuild.
+
+Run **once** to generate a self-signed code-signing cert in your login
+keychain (`CursorConfine Dev`):
+
+```bash
+./setup_signing_cert.sh
+```
+
+After this, `./build.sh` automatically signs with that identity (it
+checks `security find-identity` and falls back to ad-hoc only if the cert
+is missing). TCC trust persists across rebuilds because the code
+requirement is anchored to the cert's stable public-key hash, not the
+binary's cdhash. You'll still need to re-grant **once** the first time
+you switch from ad-hoc to the stable identity.
 
 ---
 
