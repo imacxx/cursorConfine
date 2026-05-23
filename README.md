@@ -6,10 +6,33 @@ for anyone who's tired of overshooting window edges.
 
 > "Discord's screen-picker, but for trapping your cursor."
 
-- macOS 14 (Sonoma) or newer • Apple Silicon
+- macOS 15 (Sequoia) or newer • Apple Silicon (M-series) only
 - Pure Swift + SwiftUI, zero third-party dependencies
 - Menu-bar app with a full settings window
 - Cmd-Tab always works; the cursor auto-releases when the target loses focus
+
+---
+
+## Install (end-users)
+
+If you grabbed a `CursorConfine-x.y.z-arm64.zip` from the Releases page:
+
+1. Double-click the zip to extract `CursorConfine.app`.
+2. Drag it to `/Applications`.
+3. Double-click to launch. macOS will block it with
+   *"Apple could not verify CursorConfine is free of malware."* That's expected
+   — this build isn't notarized (no $99/year Apple Developer fee).
+4. Open **System Settings → Privacy & Security**, scroll to the bottom, and
+   click **Open Anyway** next to the CursorConfine notice. Confirm with Touch ID
+   or your password.
+5. On the next launch, macOS will show one more confirmation — click **Open**.
+6. The CursorConfine main window appears. Grant **Accessibility** when the
+   Permissions tab asks (this is what lets it confine the cursor) and
+   optionally **Screen Recording** (window thumbnails + real titles in the
+   picker, otherwise you'll see "Untitled window").
+
+Same flow as other GitHub-distributed Mac apps (Rectangle, AltTab,
+MonitorControl, etc.). No App Store, no Apple ID, nothing phone-home.
 
 ---
 
@@ -60,6 +83,18 @@ Run unit tests:
 ```bash
 swift test
 ```
+
+### Cut a release
+
+```bash
+./release.sh                                # → dist/CursorConfine-x.y.z-arm64.zip
+```
+
+The script uses `ditto` (not `zip`) so the code signature survives the
+round-trip. Upload the zip to a GitHub release; recipients follow the
+**Install (end-users)** flow above. The version comes from
+`CFBundleShortVersionString` in `Info.plist` — bump it there before cutting
+a release.
 
 (Optional) one-liner with Swift only, no script:
 

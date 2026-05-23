@@ -1,6 +1,7 @@
 # Build output (large, regenerable)
 .build/
 build/
+dist/
 
 # Xcode / Swift Package Manager noise
 .swiftpm/
