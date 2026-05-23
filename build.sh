@@ -29,11 +29,13 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 cp "$BIN_PATH/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 cp Info.plist "$APP_BUNDLE/Contents/Info.plist"
 
-# Drop in the compiled icon assets. Assets.car carries the multi-appearance
-# variants (used in macOS 14+); AppIcon.icns is the classic single-appearance
-# fallback (used by Finder thumbnails on older macOS / non-asset-catalog paths).
-cp "$BUILD_DIR/AssetCatalog/Assets.car"    "$APP_BUNDLE/Contents/Resources/Assets.car"
-cp "$BUILD_DIR/AssetCatalog/AppIcon.icns"  "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+# Drop in the compiled icon assets. AppIcon.icns is what Finder, the App
+# Switcher, and the initial Dock thumbnail use. The two PNGs ride along so
+# AppIconAppearance.swift can swap NSApp.applicationIconImage at runtime
+# based on the system appearance (macOS doesn't switch Dock icons natively).
+cp "$BUILD_DIR/AssetCatalog/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+cp art/icon-light.png "$APP_BUNDLE/Contents/Resources/icon-light.png"
+cp art/icon-dark.png  "$APP_BUNDLE/Contents/Resources/icon-dark.png"
 
 # Strip any quarantine/extended attributes that would interfere with running
 xattr -cr "$APP_BUNDLE" 2>/dev/null || true

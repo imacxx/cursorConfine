@@ -24,6 +24,7 @@ final class AppState {
     let launchAtLogin: LaunchAtLoginService
     let soundNotification: SoundNotificationService
     let screenSaverMonitor: ScreenSaverMonitor
+    let appIconAppearance: AppIconAppearance
 
     // MARK: - Observable state
 
@@ -70,6 +71,7 @@ final class AppState {
         let lal = LaunchAtLoginService()
         let sound = SoundNotificationService()
         let screensaver = ScreenSaverMonitor()
+        let appIcon = AppIconAppearance()
 
         self.settingsStore = settings
         self.permissions = perms
@@ -83,6 +85,7 @@ final class AppState {
         self.launchAtLogin = lal
         self.soundNotification = sound
         self.screenSaverMonitor = screensaver
+        self.appIconAppearance = appIcon
 
         self.currentTarget = settings.settings.lastTarget
     }
@@ -90,6 +93,8 @@ final class AppState {
     // MARK: - Bootstrap
 
     func bootstrap() {
+        appIconAppearance.start()
+
         permissions.startMonitoring()
         permissions.refresh()
 
