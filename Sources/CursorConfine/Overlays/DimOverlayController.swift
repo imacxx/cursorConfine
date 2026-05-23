@@ -12,6 +12,15 @@ final class DimOverlayController {
     private var lastOpacity: Double = 0
 
     func show(rect: CGRect, opacity: Double) {
+        // Fast path: nothing changed and the window is already visible.
+        // The shell timer calls this at 30 Hz; without this guard we'd
+        // re-evaluate the SwiftUI body and shove a new rootView at the
+        // hosting view 30 times per second even on a static rect, which
+        // competes with the event-tap callback for the main runloop.
+        if rect == lastRect, opacity == lastOpacity, window?.isVisible == true {
+            return
+        }
+
         let totalCG = totalBoundsCG()
         if window == nil {
             createWindow(frame: Geometry.appKitRect(fromCG: totalCG))

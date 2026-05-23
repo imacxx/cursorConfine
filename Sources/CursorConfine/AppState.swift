@@ -115,13 +115,7 @@ final class AppState {
         }
 
         engine.inset = CGFloat(settingsStore.settings.edgeInset)
-        engine.temporaryReleaseCheck = { [weak self] in
-            guard let self else { return false }
-            let mod = self.settingsStore.settings.holdToReleaseModifier
-            if mod == .none { return false }
-            let flags = CGEvent(source: nil)?.flags ?? []
-            return flags.contains(mod.cgFlag)
-        }
+        engine.holdToReleaseMask = settingsStore.settings.holdToReleaseModifier.cgFlag
 
         // Install the event tap eagerly. If Accessibility hasn't been granted
         // yet, the tap won't install — we surface that via permissions UI and
@@ -283,6 +277,7 @@ final class AppState {
 
         // Re-apply runtime config
         engine.inset = CGFloat(settingsStore.settings.edgeInset)
+        engine.holdToReleaseMask = settingsStore.settings.holdToReleaseModifier.cgFlag
 
         // Tap-not-installed is the dominant state — without it no clamping
         // can possibly happen, regardless of armed/target/focus. Surface that

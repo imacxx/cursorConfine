@@ -32,14 +32,23 @@ final class ConfinementEngine {
     /// Inset (in points) shrinks the clamp rect on all four sides.
     var inset: CGFloat = 0
 
-    /// Optional pre-confinement check. If this returns false the tap passes
-    /// events through (used for the hold-to-release modifier).
-    var temporaryReleaseCheck: (@MainActor () -> Bool)?
+    /// Modifier mask that temporarily releases confinement when held. Empty
+    /// = disabled. Reading `event.flags` directly inside the tap callback is
+    /// dramatically cheaper than instantiating a new CGEvent to query the
+    /// system flag state per mouse move (the previous closure-based design
+    /// did that allocation thousands of times per second during edge slides).
+    var holdToReleaseMask: CGEventFlags = []
 
     // MARK: - Internals
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    /// Position of the most recent warp. When the user pushes against an
+    /// edge a gaming mouse can deliver 1000 mouseMoved events / second, all
+    /// clamping to the same point. Skipping the WindowServer round-trip
+    /// when the target hasn't changed cuts warp traffic by ~99% during
+    /// edge slides.
+    private var lastWarpPos: CGPoint?
 
     // The mouse event types we observe. Keys/buttons are never trapped.
     private static let eventsOfInterest: CGEventMask =
@@ -131,6 +140,7 @@ final class ConfinementEngine {
     func disengage() {
         self.activeRect = nil
         self.isConfining = false
+        self.lastWarpPos = nil   // next engage starts fresh
     }
 
     // MARK: - Event tap callback
@@ -155,8 +165,9 @@ final class ConfinementEngine {
         // Pass-through when not actively confining.
         guard let rect = activeRect else { return Unmanaged.passUnretained(event) }
 
-        // Hold-to-release: if the registered modifier is being held, pass events through.
-        if let check = temporaryReleaseCheck, check() {
+        // Hold-to-release modifier — read flags off the event we already have
+        // instead of constructing a fresh CGEvent.
+        if !holdToReleaseMask.isEmpty && event.flags.contains(holdToReleaseMask) {
             return Unmanaged.passUnretained(event)
         }
 
@@ -164,10 +175,13 @@ final class ConfinementEngine {
         let clamped = Geometry.clamp(point: loc, to: rect)
         if clamped != loc {
             event.location = clamped
-            // CGWarpMouseCursorPosition forces the system cursor sprite to follow,
-            // which matters for games that read the cursor position from HID directly.
-            // It can suppress mouse movement briefly; that's actually desirable here.
-            CGWarpMouseCursorPosition(clamped)
+            // Only warp the sprite if the clamped target actually moved.
+            // Without this we'd hammer WindowServer with a warp per HID
+            // poll (~1000/s on gaming mice) while sliding along an edge.
+            if clamped != lastWarpPos {
+                CGWarpMouseCursorPosition(clamped)
+                lastWarpPos = clamped
+            }
         }
         return Unmanaged.passUnretained(event)
     }

@@ -7,8 +7,18 @@ final class BorderOverlayController {
 
     private var window: NSWindow?
     private var hostingView: NSHostingView<BorderOverlayView>?
+    private var lastRect: CGRect?
+    private var lastColor: Color?
+    private var lastWidth: CGFloat?
 
     func show(rect: CGRect, color: Color, width: CGFloat) {
+        // Fast path — see DimOverlayController for the rationale. The shell
+        // timer pulses at 30 Hz; we don't want to rebuild the SwiftUI tree
+        // on every tick when the rect, color, and width are all unchanged.
+        if rect == lastRect, width == lastWidth, color == lastColor, window?.isVisible == true {
+            return
+        }
+
         // Pad the window slightly so the stroke isn't clipped.
         let pad = max(2, width * 2)
         let outerCG = rect.insetBy(dx: -pad, dy: -pad)
@@ -32,6 +42,9 @@ final class BorderOverlayController {
             hostingView = hv
         }
 
+        lastRect = rect
+        lastColor = color
+        lastWidth = width
         window?.orderFrontRegardless()
     }
 
