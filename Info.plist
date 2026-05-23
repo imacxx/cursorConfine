@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>CursorConfine</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.cursorconfine.app</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>CursorConfine</string>
+    <key>CFBundleDisplayName</key>
+    <string>CursorConfine</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>15.0</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>CursorConfine needs Accessibility access to install a global mouse event tap, which is how it confines the cursor to a window or region. Without this permission it cannot lock the cursor.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>CursorConfine uses Screen Recording to fetch live thumbnails of your open windows in the window picker. You can use the app without granting this — you'll see app icons instead of thumbnails.</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>CursorConfine uses Apple Events to detect window focus changes for automatic confinement.</string>
+</dict>
+</plist>

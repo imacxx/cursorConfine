@@ -1,0 +1,18 @@
+# Build output (large, regenerable)
+.build/
+build/
+
+# Xcode / Swift Package Manager noise
+.swiftpm/
+*.xcodeproj/
+DerivedData/
+
+# Mac noise
+.DS_Store
+
+# Misc
+*.swp
+*~
+
+# Local-only logs / scratch
+*.log
