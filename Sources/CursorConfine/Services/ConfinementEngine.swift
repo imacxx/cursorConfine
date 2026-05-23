@@ -62,6 +62,19 @@ final class ConfinementEngine {
     func installTap() -> Bool {
         if eventTap != nil { isTapInstalled = true; return true }
 
+        // The default 250 ms post-warp local-events suppression is what made
+        // the user's cursor feel "stuck" against edges — every warp blocked
+        // the next batch of mouse moves long enough for visible jitter.
+        // The legacy `CGSetLocalEventsSuppressionInterval(0)` is gone on
+        // modern macOS; the replacement is a per-source setter. Setting it
+        // on the HID system source covers the global warp path.
+        if let hidSource = CGEventSource(stateID: .hidSystemState) {
+            hidSource.localEventsSuppressionInterval = 0
+        }
+        if let combinedSource = CGEventSource(stateID: .combinedSessionState) {
+            combinedSource.localEventsSuppressionInterval = 0
+        }
+
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
         let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
