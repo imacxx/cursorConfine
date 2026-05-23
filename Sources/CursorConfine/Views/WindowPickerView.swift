@@ -139,6 +139,18 @@ struct WindowTileView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Text(window.appName).font(.caption.bold()).lineLimit(1)
+                    if window.layer >= 100 {
+                        // Layer ≥100 is e.g. kCGOverlayWindowLevel/CGScreenSaverWindowLevel.
+                        // Fullscreen games like League of Legends sit at layer
+                        // 1000 — call it out so the user picks the right one.
+                        Text("FULLSCREEN")
+                            .font(.system(size: 8, weight: .bold))
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(Color.accentColor.opacity(0.25))
+                            .foregroundStyle(.primary)
+                            .clipShape(RoundedRectangle(cornerRadius: 3))
+                            .help("This window is at a fullscreen-game layer (\(window.layer))")
+                    }
                     if !window.isOnScreen {
                         Image(systemName: "eye.slash")
                             .font(.caption2)
@@ -146,10 +158,17 @@ struct WindowTileView: View {
                             .help("Not currently on screen — possibly fullscreen on another Space")
                     }
                 }
-                Text(window.title.isEmpty ? "Untitled window" : window.title)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(window.title.isEmpty ? "Untitled window" : window.title)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text("\(Int(window.bounds.width))×\(Int(window.bounds.height))")
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(.tertiary)
+                        .help("Window dimensions in points")
+                }
             }
         }
         .padding(6)

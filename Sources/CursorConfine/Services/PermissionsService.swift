@@ -11,8 +11,29 @@ import Observation
 @Observable
 final class PermissionsService {
 
-    private(set) var accessibilityGranted: Bool = false
-    private(set) var screenRecordingGranted: Bool = false
+    private(set) var accessibilityGranted: Bool = false {
+        didSet {
+            if !oldValue && accessibilityGranted {
+                onAccessibilityGranted?()
+            }
+        }
+    }
+    private(set) var screenRecordingGranted: Bool = false {
+        didSet {
+            if !oldValue && screenRecordingGranted {
+                onScreenRecordingGranted?()
+            }
+        }
+    }
+
+    /// Fired the first time `accessibilityGranted` transitions from false to true.
+    /// Used by AppState to re-install the event tap mid-run (tap creation fails
+    /// silently when Accessibility isn't granted at boot; the engine never
+    /// retries on its own).
+    var onAccessibilityGranted: (@MainActor () -> Void)?
+
+    /// Fired when Screen Recording flips on (used to refresh window thumbnails).
+    var onScreenRecordingGranted: (@MainActor () -> Void)?
 
     private var timer: Timer?
 

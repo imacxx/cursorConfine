@@ -97,6 +97,21 @@ final class AppState {
 
         permissions.startMonitoring()
         permissions.refresh()
+        // When the user grants Accessibility after launch (typical first-run
+        // flow, or after an ad-hoc-signed rebuild that broke the existing
+        // TCC trust), retry tap installation immediately. Without this the
+        // app would silently stay in "no clamp" mode until the user quit
+        // and relaunched.
+        permissions.onAccessibilityGranted = { [weak self] in
+            guard let self else { return }
+            Log.engine.info("Accessibility granted — retrying event-tap install")
+            _ = self.engine.installTap()
+            self.recomputeEngagement(reason: "accessibility granted")
+        }
+        permissions.onScreenRecordingGranted = { [weak self] in
+            // Bust the thumbnail cache so the picker re-renders with real images.
+            self?.thumbnailService.clearCache()
+        }
 
         engine.inset = CGFloat(settingsStore.settings.edgeInset)
         engine.temporaryReleaseCheck = { [weak self] in
@@ -108,7 +123,8 @@ final class AppState {
         }
 
         // Install the event tap eagerly. If Accessibility hasn't been granted
-        // yet, the tap won't install — we surface that via permissions UI.
+        // yet, the tap won't install — we surface that via permissions UI and
+        // auto-retry above when permission flips on.
         _ = engine.installTap()
 
         focusMonitor.onChange = { [weak self] in
