@@ -59,16 +59,18 @@ struct MenuBarLabel: View {
     }
 
     private var symbolName: String {
-        if appState.isPanicReleased     { return "exclamationmark.lock" }
-        if appState.engine.isConfining  { return "lock.fill" }
-        if appState.isArmed             { return "lock.open" }
+        if !appState.engine.isTapInstalled { return "exclamationmark.triangle.fill" }
+        if appState.isPanicReleased        { return "exclamationmark.lock" }
+        if appState.engine.isConfining     { return "lock.fill" }
+        if appState.isArmed                { return "lock.open" }
         return "lock.slash"
     }
 
     private var label: String {
-        if appState.isPanicReleased     { return "CursorConfine: panic-released" }
-        if appState.engine.isConfining  { return "CursorConfine: locked" }
-        if appState.isArmed             { return "CursorConfine: armed (standby)" }
+        if !appState.engine.isTapInstalled { return "CursorConfine: Accessibility not granted" }
+        if appState.isPanicReleased        { return "CursorConfine: panic-released" }
+        if appState.engine.isConfining     { return "CursorConfine: locked" }
+        if appState.isArmed                { return "CursorConfine: armed (standby)" }
         return "CursorConfine: off"
     }
 }

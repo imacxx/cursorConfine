@@ -10,6 +10,10 @@ struct HomeView: View {
         VStack(alignment: .leading, spacing: 20) {
             statusHeader
 
+            if !appState.engine.isTapInstalled {
+                accessibilityWarningBanner
+            }
+
             GroupBox("Confinement mode") {
                 modeSelector
                     .padding(.vertical, 6)
@@ -88,6 +92,43 @@ struct HomeView: View {
         }
         .pickerStyle(.segmented)
         .labelsHidden()
+    }
+
+    private var accessibilityWarningBanner: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.title2)
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Cursor clamping is OFF — Accessibility not granted to this build.")
+                    .font(.headline)
+                Text("The border + status above is a UI preview only. Without an installed event tap the cursor can leave the rect at any time. Grant Accessibility to CursorConfine; the engine starts within ~1 second of the toggle going on, no relaunch needed.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Button("Open Privacy & Security") {
+                        appState.permissions.openAccessibilityPane()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    Button("Prompt me") {
+                        appState.permissions.promptForAccessibility()
+                    }
+                    Button("Re-check now") {
+                        appState.permissions.refresh()
+                    }
+                }
+            }
+            Spacer()
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.orange.opacity(0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.orange.opacity(0.4), lineWidth: 1)
+                )
+        )
     }
 
     @ViewBuilder

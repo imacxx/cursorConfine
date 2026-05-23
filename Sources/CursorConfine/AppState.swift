@@ -105,7 +105,8 @@ final class AppState {
         permissions.onAccessibilityGranted = { [weak self] in
             guard let self else { return }
             Log.engine.info("Accessibility granted — retrying event-tap install")
-            _ = self.engine.installTap()
+            let installed = self.engine.installTap()
+            Log.engine.info("Event tap install retry: \(installed ? "success" : "failed", privacy: .public)")
             self.recomputeEngagement(reason: "accessibility granted")
         }
         permissions.onScreenRecordingGranted = { [weak self] in
@@ -282,6 +283,17 @@ final class AppState {
 
         // Re-apply runtime config
         engine.inset = CGFloat(settingsStore.settings.edgeInset)
+
+        // Tap-not-installed is the dominant state — without it no clamping
+        // can possibly happen, regardless of armed/target/focus. Surface that
+        // BEFORE anything else so the UI stops claiming "Locked" while the
+        // cursor can still walk off the rect.
+        if !engine.isTapInstalled {
+            engine.disengage()
+            overlayRect = nil
+            engagementStatus = "Engine not running — Accessibility required"
+            return
+        }
 
         if isPanicReleased {
             engine.disengage()
