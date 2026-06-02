@@ -19,20 +19,20 @@ If you grabbed a `CursorConfine-x.y.z-arm64.zip` from the Releases page:
 
 1. Double-click the zip to extract `CursorConfine.app`.
 2. Drag it to `/Applications`.
-3. Double-click to launch. macOS will block it with
-   *"Apple could not verify CursorConfine is free of malware."* That's expected
-   — this build isn't notarized (no $99/year Apple Developer fee).
-4. Open **System Settings → Privacy & Security**, scroll to the bottom, and
-   click **Open Anyway** next to the CursorConfine notice. Confirm with Touch ID
-   or your password.
-5. On the next launch, macOS will show one more confirmation — click **Open**.
-6. The CursorConfine main window appears. Grant **Accessibility** when the
+3. Double-click to launch. The build is **signed with a Developer ID and
+   notarized by Apple**, so it opens with no Gatekeeper warning and no trip
+   through System Settings.
+4. The CursorConfine main window appears. Grant **Accessibility** when the
    Permissions tab asks (this is what lets it confine the cursor) and
    optionally **Screen Recording** (window thumbnails + real titles in the
    picker, otherwise you'll see "Untitled window").
 
-Same flow as other GitHub-distributed Mac apps (Rectangle, AltTab,
-MonitorControl, etc.). No App Store, no Apple ID, nothing phone-home.
+No App Store, no Apple ID, nothing phone-home.
+
+> If you instead built an unsigned/ad-hoc zip yourself (via `./release.sh`),
+> macOS will block the first launch with *"Apple could not verify…"*. Open
+> **System Settings → Privacy & Security**, scroll down, and click **Open
+> Anyway**. Notarized release builds (`./notarize.sh`) skip this entirely.
 
 ---
 
@@ -86,15 +86,32 @@ swift test
 
 ### Cut a release
 
+For public distribution, build the **signed + notarized** zip so users can
+just double-click — no "Open Anyway":
+
+```bash
+./notarize.sh                               # → dist/CursorConfine-x.y.z-arm64.zip
+```
+
+This reuses `build.sh`, re-signs the bundle with the **Developer ID
+Application: Nicky Audenaerde (RU6DL9DFXW)** identity + hardened runtime,
+submits to Apple's notary service, staples the ticket, and packages the zip.
+
+Prereqs (one-time): the Developer ID cert in your login keychain, and a
+notarytool keychain profile. By default the script reuses the same Apple
+account's `elyra-notary` profile; override with `NOTARY_PROFILE=…` (see the
+header of `notarize.sh` for the `store-credentials` command).
+
+Quick unsigned zip (local testing only — recipients hit the "Open Anyway"
+step):
+
 ```bash
 ./release.sh                                # → dist/CursorConfine-x.y.z-arm64.zip
 ```
 
-The script uses `ditto` (not `zip`) so the code signature survives the
-round-trip. Upload the zip to a GitHub release; recipients follow the
-**Install (end-users)** flow above. The version comes from
-`CFBundleShortVersionString` in `Info.plist` — bump it there before cutting
-a release.
+Both scripts use `ditto` (not `zip`) so the code signature survives the
+round-trip. The version comes from `CFBundleShortVersionString` in
+`Info.plist` — bump it there before cutting a release.
 
 (Optional) one-liner with Swift only, no script:
 
@@ -244,9 +261,11 @@ None can be exercised from a script.
 - **Apple Silicon binary** by default. To build for Intel, replace
   `--arch arm64` in `build.sh` with `--arch x86_64` (or add both to make it
   universal).
-- **Ad-hoc signed.** macOS may show a "downloaded from internet" prompt the
-  first time. Right-click the app → Open. No paid Apple Developer account
-  needed for local use.
+- **Signing.** Release builds (`./notarize.sh`) are Developer ID-signed and
+  notarized, so they open with no Gatekeeper prompt. Local `build.sh` /
+  `release.sh` builds are ad-hoc or self-signed — macOS may show a
+  "downloaded from internet" prompt; right-click the app → Open. No paid
+  Apple Developer account needed for local use.
 - **Window titles need Screen Recording**. Without it, the picker shows "App
   — Untitled window." Bundle ID / app name still match correctly so window
   resolution after restart still works.
@@ -265,7 +284,9 @@ None can be exercised from a script.
 CursorConfine/
 ├── Package.swift                Swift Package manifest
 ├── Info.plist                   Bundle plist (NSAccessibilityUsageDescription, NSScreenCaptureUsageDescription, …)
-├── build.sh                     swift build → assemble .app → ad-hoc sign
+├── build.sh                     swift build → assemble .app → ad-hoc/self-sign
+├── release.sh                   build.sh → ditto into a (unsigned) distributable zip
+├── notarize.sh                  build.sh → Developer ID sign → notarize → staple → zip
 ├── README.md                    This file
 ├── Sources/CursorConfine/
 │   ├── CursorConfineApp.swift   @main, MenuBarExtra + Window scenes
