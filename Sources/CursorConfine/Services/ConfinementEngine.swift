@@ -39,12 +39,16 @@ final class ConfinementEngine {
     /// did that allocation thousands of times per second during edge slides).
     var holdToReleaseMask: CGEventFlags = []
 
+    /// Fired when the user invokes the system app switcher. This is treated as
+    /// intentional, unlike a leaked outside mouse click in windowed games.
+    var onIntentionalAppSwitch: (@MainActor () -> Void)?
+
     // MARK: - Internals
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
 
-    // The mouse event types we observe. Keys/buttons are never trapped.
+    // The mouse event types we observe. Keys are never trapped.
     private static let eventsOfInterest: CGEventMask =
         (1 << CGEventType.mouseMoved.rawValue) |
         (1 << CGEventType.leftMouseDragged.rawValue) |
@@ -52,7 +56,24 @@ final class ConfinementEngine {
         (1 << CGEventType.otherMouseDragged.rawValue) |
         (1 << CGEventType.leftMouseDown.rawValue) |
         (1 << CGEventType.rightMouseDown.rawValue) |
-        (1 << CGEventType.otherMouseDown.rawValue)
+        (1 << CGEventType.otherMouseDown.rawValue) |
+        (1 << CGEventType.leftMouseUp.rawValue) |
+        (1 << CGEventType.rightMouseUp.rawValue) |
+        (1 << CGEventType.otherMouseUp.rawValue) |
+        (1 << CGEventType.keyDown.rawValue)
+
+    private struct MouseButtons: OptionSet {
+        let rawValue: UInt8
+
+        static let left = MouseButtons(rawValue: 1 << 0)
+        static let right = MouseButtons(rawValue: 1 << 1)
+        static let other = MouseButtons(rawValue: 1 << 2)
+    }
+
+    /// Mouse downs cancelled because they began outside the confinement rect.
+    /// Matching ups are cancelled too so we do not emit a stray button-up into
+    /// the target window.
+    private var suppressedMouseButtons: MouseButtons = []
 
     // MARK: - Lifecycle
 
@@ -77,7 +98,9 @@ final class ConfinementEngine {
 
         let selfPtr = Unmanaged.passUnretained(self).toOpaque()
         let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
+            // Intercept at the HID boundary, before WindowServer uses an
+            // outside mouse-down to activate another app/window.
+            tap: .cghidEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
             eventsOfInterest: Self.eventsOfInterest,
@@ -168,6 +191,11 @@ final class ConfinementEngine {
             return Unmanaged.passUnretained(event)
         }
 
+        if type == .keyDown, Self.isAppSwitchShortcut(event) {
+            onIntentionalAppSwitch?()
+            return Unmanaged.passUnretained(event)
+        }
+
         // Pass-through when not actively confining.
         guard let rect = activeRect else { return Unmanaged.passUnretained(event) }
 
@@ -179,6 +207,22 @@ final class ConfinementEngine {
 
         let loc = event.location
         let clamped = Geometry.clamp(point: loc, to: rect)
+        let mouseButton = Self.mouseButton(for: type)
+
+        if let button = mouseButton, Self.isMouseDown(type), clamped != loc {
+            suppressedMouseButtons.insert(button)
+            CGWarpMouseCursorPosition(clamped)
+            return nil
+        }
+
+        if let button = mouseButton, Self.isMouseUp(type), suppressedMouseButtons.contains(button) {
+            suppressedMouseButtons.remove(button)
+            if clamped != loc {
+                CGWarpMouseCursorPosition(clamped)
+            }
+            return nil
+        }
+
         if clamped != loc {
             event.location = clamped
             // Always warp on out-of-bounds. CGWarpMouseCursorPosition also
@@ -192,6 +236,47 @@ final class ConfinementEngine {
             CGWarpMouseCursorPosition(clamped)
         }
         return Unmanaged.passUnretained(event)
+    }
+
+    private static func mouseButton(for type: CGEventType) -> MouseButtons? {
+        switch type {
+        case .leftMouseDown, .leftMouseUp:
+            return .left
+        case .rightMouseDown, .rightMouseUp:
+            return .right
+        case .otherMouseDown, .otherMouseUp:
+            return .other
+        default:
+            return nil
+        }
+    }
+
+    private static func isMouseDown(_ type: CGEventType) -> Bool {
+        switch type {
+        case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func isMouseUp(_ type: CGEventType) -> Bool {
+        switch type {
+        case .leftMouseUp, .rightMouseUp, .otherMouseUp:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func isAppSwitchShortcut(_ event: CGEvent) -> Bool {
+        let tabKeyCode: Int64 = 48
+        guard event.getIntegerValueField(.keyboardEventKeycode) == tabKeyCode else {
+            return false
+        }
+
+        let flags = event.flags
+        return flags.contains(.maskCommand) || flags.contains(.maskAlternate)
     }
 
     // MARK: - Helpers

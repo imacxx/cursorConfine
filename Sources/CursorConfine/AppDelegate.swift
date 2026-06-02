@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // SwiftUI scenes don't make easy).
     private var dimOverlayController: DimOverlayController?
     private var borderOverlayController: BorderOverlayController?
+    private var clickShieldOverlayController: ClickShieldOverlayController?
     private var regionPickerController: RegionPickerController?
     private var windowPickerController: WindowPickerWindowController?
 
@@ -36,9 +37,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Overlays.
         let dim = DimOverlayController()
         let border = BorderOverlayController()
+        let shield = ClickShieldOverlayController()
         self.dimOverlayController = dim
         self.borderOverlayController = border
-        wireOverlayUpdates(state: state, dim: dim, border: border)
+        self.clickShieldOverlayController = shield
+        wireOverlayUpdates(state: state, dim: dim, border: border, shield: shield)
 
         // SwiftUI-window-friendly intent bus.
         NotificationCenter.default.addObserver(forName: .cursorConfineOpenWindowPicker,
@@ -77,13 +80,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var overlayTimer: Timer?
 
-    private func wireOverlayUpdates(state: AppState, dim: DimOverlayController, border: BorderOverlayController) {
+    private func wireOverlayUpdates(
+        state: AppState,
+        dim: DimOverlayController,
+        border: BorderOverlayController,
+        shield: ClickShieldOverlayController
+    ) {
         overlayTimer?.invalidate()
-        overlayTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak state, weak dim, weak border] _ in
+        overlayTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { [weak state, weak dim, weak border, weak shield] _ in
             Task { @MainActor in
-                guard let state, let dim, let border else { return }
+                guard let state, let dim, let border, let shield else { return }
                 let s = state.settingsStore.settings
                 let rect = state.overlayRect
+
+                if let shieldRect = state.clickShieldRect {
+                    shield.show(protectedRect: shieldRect)
+                } else {
+                    shield.hide()
+                }
 
                 if s.dimOverlayEnabled, let rect {
                     dim.show(rect: rect, opacity: s.dimOverlayOpacity)

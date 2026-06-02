@@ -50,8 +50,15 @@ final class AppState {
     /// Last resolved windowID for .focusedWindow mode.
     private(set) var focusedTrackedWindowID: CGWindowID?
 
-    /// Bound observable for the overlays.
+    /// Bound observable for visual overlays shown only while actively locked.
     private(set) var overlayRect: CGRect?
+
+    /// Bound observable for the outside-click shield. Unlike `overlayRect`,
+    /// this stays populated while armed even if the target briefly loses focus,
+    /// so one leaked click cannot remove the shield for the next one.
+    private(set) var clickShieldRect: CGRect?
+
+    private var clickShieldSuspendedUntilTargetFocus = false
 
     /// Bound to the UI to show why we're not engaging right now.
     private(set) var engagementStatus: String = "Idle"
@@ -116,6 +123,9 @@ final class AppState {
 
         engine.inset = CGFloat(settingsStore.settings.edgeInset)
         engine.holdToReleaseMask = settingsStore.settings.holdToReleaseModifier.cgFlag
+        engine.onIntentionalAppSwitch = { [weak self] in
+            self?.suspendClickShieldForIntentionalSwitch()
+        }
 
         // Install the event tap eagerly. If Accessibility hasn't been granted
         // yet, the tap won't install — we surface that via permissions UI and
@@ -181,6 +191,8 @@ final class AppState {
         isArmed = false
         engine.disengage()
         overlayRect = nil
+        clearClickShield()
+        clickShieldSuspendedUntilTargetFocus = false
         engagementStatus = "Off"
         if settingsStore.settings.soundOnUnlock { soundNotification.playUnlockSound() }
         if settingsStore.settings.notifyOnUnlock {
@@ -200,6 +212,8 @@ final class AppState {
         isArmed = false
         engine.disengage()
         overlayRect = nil
+        clearClickShield()
+        clickShieldSuspendedUntilTargetFocus = false
         engagementStatus = "Released (panic key)"
         if settingsStore.settings.notifyOnUnlock {
             soundNotification.notify(title: "CursorConfine", body: "Panic-released")
@@ -286,6 +300,8 @@ final class AppState {
         if !engine.isTapInstalled {
             engine.disengage()
             overlayRect = nil
+            clearClickShield()
+            clickShieldSuspendedUntilTargetFocus = false
             engagementStatus = "Engine not running — Accessibility required"
             return
         }
@@ -293,12 +309,16 @@ final class AppState {
         if isPanicReleased {
             engine.disengage()
             overlayRect = nil
+            clearClickShield()
+            clickShieldSuspendedUntilTargetFocus = false
             engagementStatus = "Released (panic key)"
             return
         }
         if !isArmed {
             engine.disengage()
             overlayRect = nil
+            clearClickShield()
+            clickShieldSuspendedUntilTargetFocus = false
             engagementStatus = "Off"
             return
         }
@@ -306,6 +326,8 @@ final class AppState {
            (screenSaverMonitor.isScreenSaverActive || screenSaverMonitor.isScreenLocked) {
             engine.disengage()
             overlayRect = nil
+            clearClickShield()
+            clickShieldSuspendedUntilTargetFocus = false
             engagementStatus = "Paused (screen locked / saver)"
             return
         }
@@ -313,19 +335,30 @@ final class AppState {
         guard let resolvedRect = resolveTargetRect() else {
             engine.disengage()
             overlayRect = nil
+            clearClickShield()
+            clickShieldSuspendedUntilTargetFocus = false
             engagementStatus = "Waiting on target…"
             return
         }
 
+        let isFocusOnTargetNow = !requiresFocusGate || focusIsOnTarget()
+        let shouldResumeShield = isFocusOnTargetNow || targetAppIsFrontmost()
+        if shouldResumeShield {
+            clickShieldSuspendedUntilTargetFocus = false
+            setClickShieldRect(resolvedRect)
+        } else if clickShieldSuspendedUntilTargetFocus {
+            clearClickShield()
+        } else {
+            setClickShieldRect(resolvedRect)
+        }
+
         // Focus gate: for window/focusedWindow modes, only engage when the target
         // window is frontmost.
-        if requiresFocusGate {
-            guard focusIsOnTarget() else {
-                engine.disengage()
-                overlayRect = nil
-                engagementStatus = "Standby (target not focused)"
-                return
-            }
+        if requiresFocusGate && !isFocusOnTargetNow {
+            engine.disengage()
+            overlayRect = nil
+            engagementStatus = "Standby (target not focused)"
+            return
         }
 
         let wasConfining = engine.isConfining
@@ -340,6 +373,19 @@ final class AppState {
                                          body: "Cursor locked to \(currentTarget.summary)")
             }
         }
+    }
+
+    private func setClickShieldRect(_ rect: CGRect) {
+        clickShieldRect = rect
+    }
+
+    private func clearClickShield() {
+        clickShieldRect = nil
+    }
+
+    private func suspendClickShieldForIntentionalSwitch() {
+        clickShieldSuspendedUntilTargetFocus = true
+        clearClickShield()
     }
 
     private var requiresFocusGate: Bool {
@@ -363,6 +409,33 @@ final class AppState {
         case .focusedWindow:
             return focusMonitor.frontmostWindowID != nil
         default:
+            return true
+        }
+    }
+
+    private func targetAppIsFrontmost() -> Bool {
+        switch currentTarget.mode {
+        case .window:
+            guard let sel = currentTarget.windowSelection else { return false }
+
+            let windows = windowService.enumerate()
+            guard let target = windowService.resolve(selection: sel, in: windows) else {
+                return false
+            }
+
+            if focusMonitor.frontmostPID == target.pid {
+                return true
+            }
+            if let selectedBundle = sel.bundleIdentifier,
+               focusMonitor.frontmostBundleID == selectedBundle {
+                return true
+            }
+            return false
+
+        case .focusedWindow:
+            return focusMonitor.frontmostWindowID != nil
+
+        case .rectangle, .display:
             return true
         }
     }
